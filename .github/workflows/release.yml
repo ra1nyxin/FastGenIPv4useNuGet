@@ -1,47 +1,75 @@
-name: Build and Release
+name: Build and Dynamic Release
 
 on:
   push:
     branches: [ "main", "master" ]
+  workflow_dispatch:
 
 permissions:
   contents: write
   packages: read
 
 jobs:
-  build:
+  build-and-release:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+        cache: false 
         source-url: https://nuget.pkg.github.com/ra1nyxin/index.json
       env:
-        NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        NUGET_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
 
-    - name: Restore dependencies
+    - name: Generate Timestamp
+      id: vars
+      shell: powershell
+      run: |
+        $Timestamp = Get-Date -Format "yyyyMMdd_HHmm"
+        echo "TIMESTAMP=$Timestamp" >> $env:GITHUB_OUTPUT
+        echo $Timestamp"
+
+    - name: Restore Dependencies
+      env:
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: dotnet restore
 
-    - name: Build and Publish
+    - name: Publish Executable
+      env:
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: |
-        dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./publish
+        dotnet publish -c Release `
+          -r win-x64 `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -o ./publish
 
-    - name: Zip Artifact
-      run: Compress-Archive -Path ./publish/* -DestinationPath FastGenIPv4.zip
+    - name: Rename and Package
+      shell: powershell
+      run: |
+        $OldName = "FastGenIPv4useNuGet.exe"
+        $NewName = "FastGenIP_${{ steps.vars.outputs.TIMESTAMP }}.exe"
+        if (Test-Path "./publish/$OldName") {
+            Rename-Item "./publish/$OldName" -NewName "$NewName"
+        }
+        Compress-Archive -Path "./publish/*" -DestinationPath "FastGenIP_${{ steps.vars.outputs.TIMESTAMP }}.zip"
 
-    - name: Create Release
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/heads/')
       with:
-        files: FastGenIPv4.zip
-        tag_name: v${{ github.run_number }}
-        name: Release v${{ github.run_number }}
+        tag_name: "v${{ steps.vars.outputs.TIMESTAMP }}"
+        name: "Release_${{ steps.vars.outputs.TIMESTAMP }}"
+        files: "FastGenIP_${{ steps.vars.outputs.TIMESTAMP }}.zip"
         body: |
-          Automated build using ra1nyxin.RandomIpGen NuGet package.
-          Generated on: ${{ github.event.head_commit.timestamp }}
+          - ${{ steps.vars.outputs.TIMESTAMP }}
+          - ra1nyxin.RandomIpGen v1.0.2
+          - Windows x64 (Self-contained)
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
