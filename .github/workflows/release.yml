@@ -22,7 +22,6 @@ jobs:
       with:
         dotnet-version: 8.0.x
         cache: false 
-        source-url: https://nuget.pkg.github.com/ra1nyxin/index.json
       env:
         NUGET_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
 
