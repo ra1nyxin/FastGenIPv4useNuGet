@@ -32,7 +32,6 @@ jobs:
       run: |
         $Timestamp = Get-Date -Format "yyyyMMdd_HHmm"
         echo "TIMESTAMP=$Timestamp" >> $env:GITHUB_OUTPUT
-        echo $Timestamp"
 
     - name: Restore Dependencies
       env:
